@@ -1,32 +1,43 @@
-# 🛠️ Step-by-Step Setup for AI DevSecOps Box (OrbStack + Ollama on Mac)
+# 🛠️ AI DevSecOps Box (PoC) – Mac mini with OrbStack + Ollama
 
 ---
 
 ## ✅ Step 1: Install Required Tools on macOS
 
-### 1.1 Install Ollama (host-level LLM server)
+### 1.1 Install **Ollama**
 
 ```bash
 brew install ollama
+```
+
+Run your model:
+
+```bash
 ollama run deepseek-coder
 ```
 
-> This exposes a local API: `http://localhost:11434`
+> Exposes API at `http://localhost:11434`
 
 ---
 
-### 1.2 Install OrbStack
+### 1.2 Install **OrbStack**
 
-Download from [https://orbstack.dev](https://orbstack.dev)
+Download from: [https://orbstack.dev](https://orbstack.dev)
+Install and launch the GUI or CLI.
 
 ---
 
-## 🧱 Step 2: Set Up OrbStack VM
+## 🧱 Step 2: Create and Configure OrbStack VM
 
 ### 2.1 Create Ubuntu VM
 
+Limit it to 60 GB to save disk space:
+
 ```bash
-orbstack vm create devsecops --os ubuntu --memory 8G --disk 100G
+orbstack vm create devsecops \
+  --os ubuntu \
+  --memory 8G \
+  --disk 60G
 ```
 
 ### 2.2 Enter the VM
@@ -37,9 +48,7 @@ orbstack shell devsecops
 
 ---
 
-## 🐳 Step 3: Inside VM – Install Docker + GitLab + CSGHub
-
-### 3.1 Install Docker
+## 🐳 Step 3: Install Docker and Compose (in VM)
 
 ```bash
 sudo apt update
@@ -49,21 +58,24 @@ sudo systemctl enable --now docker
 
 ---
 
-### 3.2 Deploy GitLab CE
+## 📦 Step 4: Deploy GitLab + CSGHub via Docker
+
+### 4.1 Start GitLab CE
 
 ```bash
-docker run -d --hostname gitlab.local \
-  --publish 8080:80 --publish 443:443 \
+docker run -d \
+  --hostname gitlab.local \
+  --publish 8080:80 \
   --name gitlab \
   --restart always \
   gitlab/gitlab-ce:latest
 ```
 
-* Open `http://localhost:8080` on your Mac → access GitLab
+> Access GitLab at `http://localhost:8080` (on your Mac browser)
 
 ---
 
-### 3.3 Deploy CSGHub
+### 4.2 Deploy CSGHub
 
 ```bash
 git clone https://github.com/opencsg/csghub-docker.git
@@ -71,35 +83,33 @@ cd csghub-docker
 docker-compose up -d
 ```
 
-> You may need to adjust Docker images for `arm64` if issues arise.
-
 ---
 
-## 🤖 Step 4: Use Ollama from Inside OrbStack VM
+## 🤖 Step 5: Test LLM Inference via Ollama
 
-### 4.1 Test Ollama API Access
+Ollama is running on macOS. From inside the OrbStack VM:
 
 ```bash
 curl http://host.docker.internal:11434/api/generate \
-  -d '{"model":"deepseek-coder","prompt":"What is RKE2?"}'
+  -d '{"model":"deepseek-coder","prompt":"What is DevSecOps?"}'
 ```
 
-> You should see a streaming JSON response from the macOS-hosted Ollama.
+✅ You should get a streaming LLM response.
 
 ---
 
-## 🔁 Step 5: GitLab CI Integration with Ollama
+## 🔁 Step 6: GitLab CI Integration with Ollama
 
-### 5.1 Create `.gitlab-ci.yml` in your test repo
+### 6.1 In a GitLab project, create `.gitlab-ci.yml`:
 
 ```yaml
-llm_test:
+test_llm_inference:
   script:
     - curl http://host.docker.internal:11434/api/generate \
         -d '{"model":"deepseek-coder","prompt":"Explain CI/CD pipeline"}'
 ```
 
-### 5.2 Register a GitLab Runner (optional but ideal)
+### 6.2 (Optional) Add GitLab Runner
 
 ```bash
 docker run -d --name gitlab-runner --restart always \
@@ -108,31 +118,39 @@ docker run -d --name gitlab-runner --restart always \
   gitlab/gitlab-runner:latest
 ```
 
-Follow prompts to register the runner in GitLab UI.
+> Register in GitLab UI for auto pipeline execution.
 
 ---
 
-## ☸️ Optional Step 6: K3s for Orchestration Simulation
-
-If you'd like to simulate Kubernetes in OrbStack:
+## ☸️ Step 7 (Optional): Add Kubernetes Simulation with K3s
 
 ```bash
 curl -sfL https://get.k3s.io | sh -
 kubectl get nodes
 ```
 
-You can then deploy GitLab, CSGHub, or custom services as Kubernetes workloads.
+> Use `kubectl` to simulate app deployments like in production (RKE2-style).
 
 ---
 
-## ✅ You Now Have
+## 📂 Suggested Project Structure
 
-| Component     | Running In  | Notes                      |
-| ------------- | ----------- | -------------------------- |
-| Ollama LLM    | macOS Host  | GPU accelerated via Metal  |
-| GitLab CE     | OrbStack VM | Accessible via port 8080   |
-| CSGHub        | OrbStack VM | Model tracking UI          |
-| GitLab Runner | VM          | Can call Ollama via CI     |
-| Kubernetes    | (Optional)  | Via K3s inside OrbStack VM |
+```
+/devsecops-poc/
+├── docker-compose.yml     # CSGHub
+├── .gitlab-ci.yml         # LLM + CI/CD testing
+├── ollama-test.sh         # Curl to test API
+├── k8s/                   # (Optional) K3s manifests
+└── README.md              # Setup guide
+```
 
 ---
+
+## ✅ Summary
+
+| Component       | Environment        | Notes                      |
+| --------------- | ------------------ | -------------------------- |
+| Ollama (LLM)    | macOS              | Fast GPU inference (Metal) |
+| GitLab + Runner | OrbStack Ubuntu VM | Full CI/CD simulation      |
+| CSGHub          | OrbStack VM        | Track models and prompts   |
+| K3s (optional)  | OrbStack VM        | Lightweight Kubernetes     |
