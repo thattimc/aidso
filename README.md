@@ -26,67 +26,103 @@ Download from [https://orbstack.dev](https://orbstack.dev)
 ### 2.1 Create Ubuntu VM (with 60GB disk cap)
 
 ```bash
-orbstack vm create aidso \
-  --os ubuntu \
-  --memory 8G \
-  --disk 60G
+orb create ubuntu:22.04 aidso
 ```
 
 ### 2.2 Enter the VM
 
 ```bash
-orbstack shell aidso
+orb shell
 ```
 
 ---
 
-## 🐳 Step 3: Install Docker + Compose (inside `aidso` VM)
+## 🐳 Step 3: Install RKE2 (inside `aidso` VM)
 
 ```bash
-sudo apt update
-sudo apt install -y docker.io docker-compose
-sudo systemctl enable --now docker
-```
+# Install RKE2
+curl -sfL https://get.rke2.io | sudo sh -
+
+# Enable and start RKE2 service
+sudo systemctl enable rke2-server.service
+sudo systemctl start rke2-server.service
+
+# Wait for RKE2 to be ready
+sleep 30
+
+# Configure kubectl
+mkdir -p ~/.kube
+sudo cp /etc/rancher/rke2/rke2.yaml ~/.kube/config
+sudo chmod 600 ~/.kube/config
+
+# Add both lines to ~/.bashrc
+export PATH="/var/lib/rancher/rke2/bin:$PATH"
+export KUBECONFIG='/path/to/kubeconfig
+
+# Verify installation
+kubectl get nodes
+
+> RKE2 will be available at `https://localhost:6443` (default Kubernetes API port)
 
 ---
 
 ## 📦 Step 4: Deploy GitLab + CSGHub
 
-### 4.1 Start GitLab CE
+### 4.1 Install GitLab CE on VM Host
 
 ```bash
-docker run -d \
-  --hostname gitlab.local \
-  --publish 8080:80 \
-  --name gitlab \
-  --restart always \
-  gitlab/gitlab-ce:latest
+# Install required dependencies
+sudo apt update
+sudo apt install -y curl openssh-server ca-certificates tzdata perl
+
+# Add GitLab package repository
+curl https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh | sudo bash
+
+# Install GitLab CE
+sudo EXTERNAL_URL="http://gitlab.local" apt install gitlab-ce
+
+# Configure GitLab
+sudo gitlab-ctl reconfigure
+
+# Get initial root password
+sudo cat /etc/gitlab/initial_root_password
 ```
 
 > Access GitLab via `http://localhost:8080` on your Mac browser
+> Note: The initial root password is shown in the output of the last command.
+> Make sure to change it after first login.
 
 ---
 
-### 4.2 Deploy CSGHub
+### 4.2 Deploy CSGHub using Helm
 
 ```bash
-git clone https://github.com/opencsg/csghub-docker.git
-cd csghub-docker
-docker-compose up -d
+# Add CSGHub Helm repository
+helm repo add csghub https://opencsg.github.io/csghub-helm/
+helm repo update
+
+# Create namespace for CSGHub
+kubectl create namespace csghub
+
+# Install CSGHub
+helm install csghub csghub/csghub -n csghub
 ```
 
 ---
 
 ## 🤖 Step 5: Connect to Ollama from the VM
 
-With Ollama running on the Mac host:
+With Ollama running on the Mac host, create a Kubernetes service to access it:
 
 ```bash
-curl http://host.docker.internal:11434/api/generate \
-  -d '{"model":"deepseek-coder","prompt":"What is DevSecOps?"}'
+# Create a service to access Ollama
+kubectl create service externalname ollama --external-name host.docker.internal --tcp=11434:11434
+
+# Test the connection
+kubectl run -it --rm test-curl --image=curlimages/curl -- sh -c 'curl http://ollama:11434/api/generate -d '"'"'{"model":"deepseek-coder","prompt":"What is DevSecOps?"}'"'"''
 ```
 
-✅ You’ll get the streamed LLM output.
+✅ You'll get the streamed LLM output.
 
 ---
 
@@ -97,7 +133,7 @@ curl http://host.docker.internal:11434/api/generate \
 ```yaml
 llm_test:
   script:
-    - curl http://host.docker.internal:11434/api/generate \
+    - curl http://ollama:11434/api/generate \
         -d '{"model":"deepseek-coder","prompt":"Explain CI/CD pipeline"}'
 ```
 

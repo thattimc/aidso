@@ -1,0 +1,28 @@
+# Kubernetes
+kubeconfig
+*.kubeconfig
+.kube/
+kubeconfig.*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+vendor/ 
