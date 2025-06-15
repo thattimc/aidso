@@ -47,17 +47,12 @@ curl -sfL https://get.rke2.io | sudo sh -
 sudo systemctl enable rke2-server.service
 sudo systemctl start rke2-server.service
 
-# Wait for RKE2 to be ready
-sleep 30
-
-# Configure kubectl
-mkdir -p ~/.kube
-sudo cp /etc/rancher/rke2/rke2.yaml ~/.kube/config
-sudo chmod 600 ~/.kube/config
-
 # Add both lines to ~/.bashrc
 export PATH="/var/lib/rancher/rke2/bin:$PATH"
 export KUBECONFIG='/path/to/kubeconfig
+
+# Source ~/.bashrc
+source ~/.bashrc
 
 # Verify installation
 kubectl get nodes
