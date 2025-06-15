@@ -8,7 +8,7 @@
 
 ```bash
 brew install ollama
-ollama run deepseek-coder
+ollama run gemma3:12b
 ```
 
 > This exposes an API at `http://localhost:11434`
@@ -48,113 +48,57 @@ sudo systemctl enable rke2-server.service
 sudo systemctl start rke2-server.service
 
 # Add both lines to ~/.bashrc
+cat >> ~/.bashrc <<'EOL'
 export PATH="/var/lib/rancher/rke2/bin:$PATH"
-export KUBECONFIG='/path/to/kubeconfig
+export KUBECONFIG="/etc/rancher/rke2/rke2.yaml"
+EOL
 
 # Source ~/.bashrc
 source ~/.bashrc
 
+# Update kubeconfig permission
+sudo chmod 644 /etc/rancher/rke2/rke2.yaml
+
 # Verify installation
 kubectl get nodes
 
+# Set kubeconfig permission
+sudo -i
+cat >> /etc/rancher/rke2/config.yaml <<'EOL'
+write-kubeconfig-mode: "0644"
+EOL
+
+# Use Cilium for CNI
+sudo -i
+cat >> /etc/rancher/rke2/config.yaml <<'EOL'
+cni: cilium
+EOL
+
+cat >> /var/lib/rancher/rke2/server/manifests/rke2-cilium-config.yaml <<'EOL'
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: rke2-cilium
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    eni:
+      enabled: true
+    kubeProxyReplacement: true
+    k8sServiceHost: "localhost"
+    k8sServicePort: "6443"
+    hubble:
+      enabled: true
+      relay:
+        enabled: true
+      ui:
+        enabled: true
+EOL
+
+# Restart RKE2
+sudo systemctl restart rke2-server
+
+# Follow the logs
+journalctl -u rke2-server -f
+
 > RKE2 will be available at `https://localhost:6443` (default Kubernetes API port)
-
----
-
-## 📦 Step 4: Deploy GitLab + CSGHub
-
-### 4.1 Install GitLab CE on VM Host
-
-```bash
-# Install required dependencies
-sudo apt update
-sudo apt install -y curl openssh-server ca-certificates tzdata perl
-
-# Add GitLab package repository
-curl https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh | sudo bash
-
-# Install GitLab CE
-sudo EXTERNAL_URL="http://gitlab.local" apt install gitlab-ce
-
-# Configure GitLab
-sudo gitlab-ctl reconfigure
-
-# Get initial root password
-sudo cat /etc/gitlab/initial_root_password
-```
-
-> Access GitLab via `http://localhost:8080` on your Mac browser
-> Note: The initial root password is shown in the output of the last command.
-> Make sure to change it after first login.
-
----
-
-### 4.2 Deploy CSGHub using Helm
-
-```bash
-# Add CSGHub Helm repository
-helm repo add csghub https://opencsg.github.io/csghub-helm/
-helm repo update
-
-# Create namespace for CSGHub
-kubectl create namespace csghub
-
-# Install CSGHub
-helm install csghub csghub/csghub -n csghub
-```
-
----
-
-## 🤖 Step 5: Connect to Ollama from the VM
-
-With Ollama running on the Mac host, create a Kubernetes service to access it:
-
-```bash
-# Create a service to access Ollama
-kubectl create service externalname ollama --external-name host.docker.internal --tcp=11434:11434
-
-# Test the connection
-kubectl run -it --rm test-curl --image=curlimages/curl -- sh -c 'curl http://ollama:11434/api/generate -d '"'"'{"model":"deepseek-coder","prompt":"What is DevSecOps?"}'"'"''
-```
-
-✅ You'll get the streamed LLM output.
-
----
-
-## 🔁 Step 6: GitLab CI Integration (via `.gitlab-ci.yml`)
-
-### Sample:
-
-```yaml
-llm_test:
-  script:
-    - curl http://ollama:11434/api/generate \
-        -d '{"model":"deepseek-coder","prompt":"Explain CI/CD pipeline"}'
-```
-
----
-
-## 🧪 Optional Step 7: Add Kubernetes (K3s)
-
-Inside `aidso` VM:
-
-```bash
-curl -sfL https://get.k3s.io | sh -
-kubectl get nodes
-```
-
----
-
-## ✅ Final Setup Summary
-
-| Component          | Runs Where | Purpose                        |
-| ------------------ | ---------- | ------------------------------ |
-| **Ollama**         | macOS Host | LLM inference (GPU via Metal)  |
-| **GitLab CE**      | `aidso` VM | DevOps CI/CD pipeline          |
-| **GitLab Runner**  | `aidso` VM | Execute prompt-based jobs      |
-| **CSGHub**         | `aidso` VM | Model registry                 |
-| **K3s (Optional)** | `aidso` VM | Lightweight Kubernetes runtime |
-
----
-
-Would you like a downloadable zip of the full repo folder with `.gitlab-ci.yml`, `docker-compose.yml`, and `ollama-test.sh` preconfigured for `aidso`?
