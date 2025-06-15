@@ -1,40 +1,32 @@
-# 🛠️ AI DevSecOps Box (PoC) – Mac mini with OrbStack + Ollama
+# 🛠️ AI DevSecOps Box PoC on Mac mini (VM Name: `aidso`)
 
 ---
 
 ## ✅ Step 1: Install Required Tools on macOS
 
-### 1.1 Install **Ollama**
+### 1.1 Install Ollama (for GPU inference via Metal)
 
 ```bash
 brew install ollama
-```
-
-Run your model:
-
-```bash
 ollama run deepseek-coder
 ```
 
-> Exposes API at `http://localhost:11434`
+> This exposes an API at `http://localhost:11434`
 
 ---
 
-### 1.2 Install **OrbStack**
+### 1.2 Install OrbStack
 
-Download from: [https://orbstack.dev](https://orbstack.dev)
-Install and launch the GUI or CLI.
+Download from [https://orbstack.dev](https://orbstack.dev)
 
 ---
 
-## 🧱 Step 2: Create and Configure OrbStack VM
+## 🧱 Step 2: Create and Configure OrbStack VM (`aidso`)
 
-### 2.1 Create Ubuntu VM
-
-Limit it to 60 GB to save disk space:
+### 2.1 Create Ubuntu VM (with 60GB disk cap)
 
 ```bash
-orbstack vm create devsecops \
+orbstack vm create aidso \
   --os ubuntu \
   --memory 8G \
   --disk 60G
@@ -43,12 +35,12 @@ orbstack vm create devsecops \
 ### 2.2 Enter the VM
 
 ```bash
-orbstack shell devsecops
+orbstack shell aidso
 ```
 
 ---
 
-## 🐳 Step 3: Install Docker and Compose (in VM)
+## 🐳 Step 3: Install Docker + Compose (inside `aidso` VM)
 
 ```bash
 sudo apt update
@@ -58,7 +50,7 @@ sudo systemctl enable --now docker
 
 ---
 
-## 📦 Step 4: Deploy GitLab + CSGHub via Docker
+## 📦 Step 4: Deploy GitLab + CSGHub
 
 ### 4.1 Start GitLab CE
 
@@ -71,7 +63,7 @@ docker run -d \
   gitlab/gitlab-ce:latest
 ```
 
-> Access GitLab at `http://localhost:8080` (on your Mac browser)
+> Access GitLab via `http://localhost:8080` on your Mac browser
 
 ---
 
@@ -85,72 +77,53 @@ docker-compose up -d
 
 ---
 
-## 🤖 Step 5: Test LLM Inference via Ollama
+## 🤖 Step 5: Connect to Ollama from the VM
 
-Ollama is running on macOS. From inside the OrbStack VM:
+With Ollama running on the Mac host:
 
 ```bash
 curl http://host.docker.internal:11434/api/generate \
   -d '{"model":"deepseek-coder","prompt":"What is DevSecOps?"}'
 ```
 
-✅ You should get a streaming LLM response.
+✅ You’ll get the streamed LLM output.
 
 ---
 
-## 🔁 Step 6: GitLab CI Integration with Ollama
+## 🔁 Step 6: GitLab CI Integration (via `.gitlab-ci.yml`)
 
-### 6.1 In a GitLab project, create `.gitlab-ci.yml`:
+### Sample:
 
 ```yaml
-test_llm_inference:
+llm_test:
   script:
     - curl http://host.docker.internal:11434/api/generate \
         -d '{"model":"deepseek-coder","prompt":"Explain CI/CD pipeline"}'
 ```
 
-### 6.2 (Optional) Add GitLab Runner
-
-```bash
-docker run -d --name gitlab-runner --restart always \
-  -v /srv/gitlab-runner/config:/etc/gitlab-runner \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  gitlab/gitlab-runner:latest
-```
-
-> Register in GitLab UI for auto pipeline execution.
-
 ---
 
-## ☸️ Step 7 (Optional): Add Kubernetes Simulation with K3s
+## 🧪 Optional Step 7: Add Kubernetes (K3s)
+
+Inside `aidso` VM:
 
 ```bash
 curl -sfL https://get.k3s.io | sh -
 kubectl get nodes
 ```
 
-> Use `kubectl` to simulate app deployments like in production (RKE2-style).
+---
+
+## ✅ Final Setup Summary
+
+| Component          | Runs Where | Purpose                        |
+| ------------------ | ---------- | ------------------------------ |
+| **Ollama**         | macOS Host | LLM inference (GPU via Metal)  |
+| **GitLab CE**      | `aidso` VM | DevOps CI/CD pipeline          |
+| **GitLab Runner**  | `aidso` VM | Execute prompt-based jobs      |
+| **CSGHub**         | `aidso` VM | Model registry                 |
+| **K3s (Optional)** | `aidso` VM | Lightweight Kubernetes runtime |
 
 ---
 
-## 📂 Suggested Project Structure
-
-```
-/devsecops-poc/
-├── docker-compose.yml     # CSGHub
-├── .gitlab-ci.yml         # LLM + CI/CD testing
-├── ollama-test.sh         # Curl to test API
-├── k8s/                   # (Optional) K3s manifests
-└── README.md              # Setup guide
-```
-
----
-
-## ✅ Summary
-
-| Component       | Environment        | Notes                      |
-| --------------- | ------------------ | -------------------------- |
-| Ollama (LLM)    | macOS              | Fast GPU inference (Metal) |
-| GitLab + Runner | OrbStack Ubuntu VM | Full CI/CD simulation      |
-| CSGHub          | OrbStack VM        | Track models and prompts   |
-| K3s (optional)  | OrbStack VM        | Lightweight Kubernetes     |
+Would you like a downloadable zip of the full repo folder with `.gitlab-ci.yml`, `docker-compose.yml`, and `ollama-test.sh` preconfigured for `aidso`?
